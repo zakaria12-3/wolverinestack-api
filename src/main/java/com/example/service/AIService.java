@@ -14,6 +14,10 @@ public class AIService {
 
     @Value("${GROQ_API_KEY:}")
     private String apiKey;
+
+    @Value("${GROQ_VISION_MODEL:meta-llama/llama-4-scout-17b-16e-instruct}")
+    private String visionModel;
+
     private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
     public String askAI(String prompt) {
@@ -21,6 +25,33 @@ public class AIService {
     }
 
     public String askAI(String prompt, boolean requireJson) {
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", "user");
+        message.put("content", prompt);
+
+        return sendChatRequest("llama-3.1-8b-instant", List.of(message), 1024, requireJson);
+    }
+
+    public String askVision(String prompt, String imageDataUrl, boolean requireJson) {
+        Map<String, Object> textPart = new HashMap<>();
+        textPart.put("type", "text");
+        textPart.put("text", prompt);
+
+        Map<String, Object> imageUrl = new HashMap<>();
+        imageUrl.put("url", imageDataUrl);
+
+        Map<String, Object> imagePart = new HashMap<>();
+        imagePart.put("type", "image_url");
+        imagePart.put("image_url", imageUrl);
+
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", "user");
+        message.put("content", List.of(textPart, imagePart));
+
+        return sendChatRequest(visionModel, List.of(message), 1200, requireJson);
+    }
+
+    private String sendChatRequest(String model, List<Map<String, Object>> messages, int maxTokens, boolean requireJson) {
         if (!hasConfiguredApiKey()) {
             return "AI error: GROQ_API_KEY is not configured";
         }
@@ -34,14 +65,10 @@ public class AIService {
 
             ObjectMapper mapper = new ObjectMapper();
 
-            Map<String, Object> message = new HashMap<>();
-            message.put("role", "user");
-            message.put("content", prompt);
-
             Map<String, Object> body = new HashMap<>();
-            body.put("model", "llama-3.1-8b-instant");
-            body.put("messages", List.of(message));
-            body.put("max_tokens", 1024);
+            body.put("model", model);
+            body.put("messages", messages);
+            body.put("max_tokens", maxTokens);
             if (requireJson) {
                 body.put("response_format", Map.of("type", "json_object"));
             }

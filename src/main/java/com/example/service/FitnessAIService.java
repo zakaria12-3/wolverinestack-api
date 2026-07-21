@@ -42,6 +42,35 @@ public class FitnessAIService {
         return parseJsonResponse(response);
     }
 
+    public Map<String, Object> analyzeMealImage(String imageDataUrl, String mealType) {
+        String prompt = """
+        You are a precise nutrition analyst AI. Analyze the meal in the attached image and estimate its nutrition.
+
+        Meal Type: %s
+
+        Return ONLY valid JSON with this exact structure (no markdown, no extra text):
+        {
+          "foodName": "<short meal name>",
+          "description": "<brief visible-food description>",
+          "estimatedCalories": <integer>,
+          "proteinGrams": <number>,
+          "carbsGrams": <number>,
+          "fatGrams": <number>,
+          "fiberGrams": <number>,
+          "confidenceScore": <integer 0-100>,
+          "suggestions": "<brief suggestion for improvement or portion adjustment>"
+        }
+
+        Rules:
+        - Estimate based only on visible food and standard portion sizes
+        - If the image is unclear, lower confidence and explain the uncertainty in suggestions
+        - If the image does not show recognizable food, return confidenceScore: 0 and estimatedCalories: 0
+        """.formatted(mealType != null ? mealType : "meal");
+
+        String response = aiService.askVision(prompt, imageDataUrl, true);
+        return parseJsonResponse(response);
+    }
+
     public Map<String, Object> suggestWorkout(String fitnessGoal, String activityLevel,
                                               String availableEquipment, String difficulty) {
         String prompt = """

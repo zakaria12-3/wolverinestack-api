@@ -12,6 +12,7 @@ public class ExerciseDto {
     private String muscleGroup;
     private String equipment;
     private Integer orderIndex;
+    private String imageUrl;
     private String correctAnswer; // for AI reference
 
     public Long getId() { return id; }
@@ -46,6 +47,9 @@ public class ExerciseDto {
 
     public Integer getOrderIndex() { return orderIndex; }
     public void setOrderIndex(Integer orderIndex) { this.orderIndex = orderIndex; }
+
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 
     public String getCorrectAnswer() { return correctAnswer; }
     public void setCorrectAnswer(String correctAnswer) { this.correctAnswer = correctAnswer; }

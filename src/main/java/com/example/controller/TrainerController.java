@@ -101,6 +101,9 @@ public class TrainerController {
     @PostMapping("/plans")
     public CreateWorkoutPlanDto createPlan(@RequestBody CreateWorkoutPlanDto dto,
                                            Authentication authentication) {
+        User trainer = currentTrainer(authentication);
+        workoutService.ensureTrainerCanManageWorkouts(trainer);
+        dto.setTrainerId(trainer.getId());
         workoutPlanService.createPlan(dto);
         return dto;
     }

@@ -4,10 +4,13 @@ import com.example.model.User;
 import com.example.repository.UserRepository;
 import com.example.service.AIService;
 import com.example.service.FitnessAIService;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Base64;
 import java.util.Map;
 
 @RestController
@@ -53,6 +56,32 @@ public class FitnessAIController {
         String mealType = body.get("mealType");
         try {
             return ResponseEntity.ok(fitnessAIService.analyzeMeal(foodDescription, mealType));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/analyze-meal-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> analyzeMealImage(@RequestParam("image") MultipartFile image,
+                                              @RequestParam(value = "mealType", required = false) String mealType,
+                                              Authentication authentication) {
+        try {
+            if (image == null || image.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Meal image is required"));
+            }
+
+            String contentType = image.getContentType();
+            if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Uploaded file must be an image"));
+            }
+
+            if (image.getSize() > 8 * 1024 * 1024) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Image must be smaller than 8MB"));
+            }
+
+            String encodedImage = Base64.getEncoder().encodeToString(image.getBytes());
+            String imageDataUrl = "data:" + contentType + ";base64," + encodedImage;
+            return ResponseEntity.ok(fitnessAIService.analyzeMealImage(imageDataUrl, mealType));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
