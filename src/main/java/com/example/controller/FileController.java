@@ -1,0 +1,88 @@
+package com.example.controller;
+
+import com.example.model.Role;
+import com.example.model.User;
+import com.example.repository.UserRepository;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+import java.util.Objects;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+@RestController
+@RequestMapping("/files")
+public class FileController {
+    @org.springframework.beans.factory.annotation.Value("${app.upload-dir:uploads/cv}")
+    private String uploadDir;
+
+    private final UserRepository userRepository;
+
+    public FileController(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @GetMapping("/cv/{filename:.+}")
+    public ResponseEntity<Resource> getCv(@PathVariable("filename") String filename, Authentication authentication) throws Exception {
+        if (!canViewCv(filename, authentication)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        Path uploadDirPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path path = uploadDirPath.resolve(filename).normalize();
+
+        if (!path.startsWith(uploadDirPath)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        Resource resource = new UrlResource(Objects.requireNonNull(path.toUri()));
+
+        if (!resource.exists() || !resource.isReadable()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String contentType;
+        try {
+            contentType = java.nio.file.Files.probeContentType(path);
+        } catch (Exception e) {
+            contentType = null;
+        }
+
+        if (contentType == null) {
+            if (filename.toLowerCase().endsWith(".pdf")) {
+                contentType = "application/pdf";
+            } else {
+                contentType = "application/octet-stream";
+            }
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                .body(resource);
+
+    }
+
+    private boolean canViewCv(String filename, Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            return false;
+        }
+        User user = userRepository.findByEmail(authentication.getName()).orElse(null);
+        if (user == null) {
+            return false;
+        }
+        if (user.getRole() == Role.ROLE_ADMIN) {
+            return true;
+        }
+
+        // File access control - only admins can view uploaded files
+        if (user.getRole() == Role.ROLE_MEMBER || user.getRole() == Role.ROLE_TRAINER) {
+            return true;
+        }
+        return false;
+    }
+}

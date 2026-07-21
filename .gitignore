@@ -1,0 +1,37 @@
+# Backend (Spring Boot)
+build/
+target/
+*.jar
+*.war
+*.class
+*.log
+hs_err_*.log
+replay_*.log
+*.iml
+.idea/
+.gradle/
+*.gradle.kotlin
+gradle/wrapper/gradle-wrapper.jar
+
+# Freebuff desktop app data (contains secrets)
+.freebuff/
+
+# Frontend (Angular)
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/.vscode/
+frontend/*.log
+frontend/hs_err_*.log
+frontend/replay_*.log
+frontend/nul
+
+# Environment
+.env
+.application.properties
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
