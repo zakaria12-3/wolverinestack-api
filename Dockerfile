@@ -12,7 +12,7 @@ WORKDIR /app
 COPY build.gradle settings.gradle gradle.properties ./
 COPY gradle gradle
 COPY gradlew gradlew.bat ./
-
+RUN chmod +x gradlew
 # Download dependencies (cached layer)
 RUN ./gradlew dependencies --no-daemon || true
 
