@@ -55,6 +55,15 @@ public class MessageController {
         return ResponseEntity.ok(messagingService.getConversation(userId, partnerId));
     }
 
+    @GetMapping("/conversations/{partnerId}")
+    public ResponseEntity<List<MessageDto>> getConversationByFrontendRoute(
+            @PathVariable Long partnerId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        Long userId = resolveUserId(userDetails);
+        return ResponseEntity.ok(messagingService.getConversation(userId, partnerId));
+    }
+
     @PostMapping("/send")
     public ResponseEntity<MessageDto> send(
             @RequestBody SendMessageRequest req,

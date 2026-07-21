@@ -50,7 +50,7 @@ public class MessagingService {
         msg.setContent(content.trim());
 
         Message saved = messageRepo.save(msg);
-        return toDto(saved);
+        return toDto(saved, senderId);
     }
 
 
@@ -60,7 +60,7 @@ public class MessagingService {
 
         return messageRepo.findConversation(currentUserId, partnerId)
                 .stream()
-                .map(this::toDto)
+                .map(message -> toDto(message, currentUserId))
                 .collect(Collectors.toList());
     }
 
@@ -125,8 +125,8 @@ public class MessagingService {
     }
 
 
-    private MessageDto toDto(Message m) {
-        return new MessageDto(
+    private MessageDto toDto(Message m, Long currentUserId) {
+        MessageDto dto = new MessageDto(
                 m.getId(),
                 m.getSender().getId(),
                 m.getReceiver().getId(),
@@ -134,5 +134,7 @@ public class MessagingService {
                 m.getCreatedAt(),
                 m.getSender().getRealUsername()
         );
+        dto.setMine(m.getSender().getId().equals(currentUserId));
+        return dto;
     }
 }

@@ -150,7 +150,7 @@ public class User implements UserDetails {
     }
 
     public boolean isEmailVerified() {
-        return Boolean.TRUE.equals(emailVerified) || (enabled && verificationCode == null);
+        return verificationCode == null && (Boolean.TRUE.equals(emailVerified) || enabled);
     }
 
     public boolean getEmailVerified() {

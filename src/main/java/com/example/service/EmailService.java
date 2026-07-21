@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -28,34 +29,46 @@ public class EmailService {
 
     private void sendEmail(String to, String subject, String htmlContent) {
         if (apiKey == null || apiKey.isBlank() || senderEmail == null || senderEmail.isBlank()) {
-            LOGGER.warn("Email not sent because BREVO_API_KEY or SUPPORT_EMAIL is not configured");
-            return;
+            throw new IllegalStateException("Email not sent because BREVO_API_KEY or SUPPORT_EMAIL is not configured");
+        }
+        if (to == null || to.isBlank()) {
+            throw new IllegalArgumentException("Recipient email is required");
         }
 
-        try {
-            Map<String, Object> body = Map.of(
-                "sender",      Map.of("email", senderEmail),
-                "to",          List.of(Map.of("email", to)),
-                "subject",     subject,
-                "htmlContent", htmlContent
-            );
+        Map<String, Object> body = Map.of(
+            "sender",      Map.of("email", senderEmail),
+            "to",          List.of(Map.of("email", to.trim().toLowerCase())),
+            "subject",     subject,
+            "htmlContent", htmlContent
+        );
 
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
-                .header("Content-Type", "application/json")
-                .header("api-key", apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-                .build();
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
+                    .timeout(Duration.ofSeconds(15))
+                    .header("Content-Type", "application/json")
+                    .header("api-key", apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
+                    .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            if (response.statusCode() >= 300) {
-                LOGGER.error("Brevo email error {} for {}: {}", response.statusCode(), to, response.body());
-                return;
+                if (response.statusCode() < 300) {
+                    return;
+                }
+
+                LOGGER.warn("Brevo email attempt {} failed with {} for {}: {}",
+                        attempt, response.statusCode(), to, response.body());
+                if (attempt == 2) {
+                    throw new IllegalStateException("Brevo email failed with status " + response.statusCode());
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Email attempt {} failed for {}", attempt, to, e);
+                if (attempt == 2) {
+                    throw new IllegalStateException("Failed to send email to " + to, e);
+                }
             }
-
-        } catch (Exception e) {
-            LOGGER.error("Failed to send email to {}", to, e);
         }
     }
 

@@ -10,6 +10,7 @@ public class MessageDto {
     private String content;
     private LocalDateTime createdAt;
     private String senderName;
+    private Boolean mine;
 
     public MessageDto() {}
 
@@ -41,4 +42,7 @@ public class MessageDto {
 
     public String getSenderName()              { return senderName; }
     public void setSenderName(String senderName){ this.senderName = senderName; }
+
+    public Boolean getMine() { return mine; }
+    public void setMine(Boolean mine) { this.mine = mine; }
 }

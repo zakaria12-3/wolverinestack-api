@@ -55,18 +55,19 @@ public class AuthenticationService {
 
     @Transactional
     public User signup(RegisterUserDto input) {
-        if (userRepository.findByEmail(input.getEmail()).isPresent()) {
+        String email = normalizeEmail(input.getEmail());
+        if (userRepository.findByEmail(email).isPresent()) {
             throw new RuntimeException("Email already exists");
         }
         if (userRepository.findByUsername(input.getUsername()).isPresent()) {
             throw new RuntimeException("Username already exists");
         }
 
-        User user = new User(input.getUsername(), input.getEmail(), passwordEncoder.encode(input.getPassword()));
+        User user = new User(input.getUsername(), email, passwordEncoder.encode(input.getPassword()));
         user.setVerificationCode(generateVerificationCode());
-        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(7));
+        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
         user.setEnabled(true);
-        user.setEmailVerified(true);
+        user.setEmailVerified(false);
         user.setPhone(input.getPhone());
         user.setJobTitle(input.getJobTitle());
 
@@ -217,7 +218,7 @@ public class AuthenticationService {
     }
 
     public User authenticate(LoginUserDto input) {
-        User user = userRepository.findByEmail(input.getEmail())
+        User user = userRepository.findByEmail(normalizeEmail(input.getEmail()))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isEmailVerified()) {
@@ -235,7 +236,7 @@ public class AuthenticationService {
 
         try {
             authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(input.getEmail(), input.getPassword())
+                    new UsernamePasswordAuthenticationToken(normalizeEmail(input.getEmail()), input.getPassword())
             );
         } catch (BadCredentialsException e) {
             throw new RuntimeException("Invalid email or password");
@@ -246,7 +247,7 @@ public class AuthenticationService {
     }
 
     public void verifyUser(VerifyUserDto input) {
-        Optional<User> optionalUser = userRepository.findByEmail(input.getEmail());
+        Optional<User> optionalUser = userRepository.findByEmail(normalizeEmail(input.getEmail()));
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.isEmailVerified() && user.getVerificationCode() == null) {
@@ -280,21 +281,22 @@ public class AuthenticationService {
         }
     }
 
+    @Transactional
     public void resendVerificationCode(String email) {
-        Optional<User> optionalUser = userRepository.findByEmail(email);
+        Optional<User> optionalUser = userRepository.findByEmail(normalizeEmail(email));
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.isEmailVerified()) {
                 throw new RuntimeException("Account is already verified !");
             }
-            user.setVerificationCode(generateVerificationCode());
-            user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
-            try {
-                sendVerificationEmail(user);
-            } catch (Exception e) {
-                LOGGER.warn("Failed to resend verification email for {}: {}", user.getEmail(), e.getMessage());
+            if (user.getVerificationCode() == null
+                    || user.getVerificationCodeExpiresAt() == null
+                    || user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+                user.setVerificationCode(generateVerificationCode());
+                user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
             }
             userRepository.save(user);
+            sendVerificationEmail(user);
         } else {
             throw new RuntimeException("User not found !");
         }
@@ -366,9 +368,12 @@ public class AuthenticationService {
     }
 
     private User findUserByEmail(String email) {
-        String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
-        return userRepository.findByEmail(normalizedEmail)
+        return userRepository.findByEmail(normalizeEmail(email))
                 .orElseThrow(() -> new RuntimeException("User not found !"));
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
     }
 
     private void validatePasswordResetCode(User user, String code) {

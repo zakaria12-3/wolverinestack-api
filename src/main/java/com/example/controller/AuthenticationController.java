@@ -150,9 +150,10 @@ public class AuthenticationController {
     }
 
     @PostMapping("/resend")
-    public void resend(@RequestBody Map<String, String> body) {
+    public ResponseEntity<String> resend(@RequestBody Map<String, String> body) {
         String email = body.get("email");
         authenticationService.resendVerificationCode(email);
+        return ResponseEntity.ok("Verification code sent.");
     }
 
     @PostMapping("/forgot-password")
