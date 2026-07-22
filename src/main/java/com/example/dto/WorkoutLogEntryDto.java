@@ -7,6 +7,7 @@ public class WorkoutLogEntryDto {
     private String exerciseName;
     private String muscleGroup;
     private String equipment;
+    private String imageUrl;
     private Integer targetSets;
     private Integer targetReps;
     private Integer actualSets;
@@ -29,6 +30,9 @@ public class WorkoutLogEntryDto {
 
     public String getEquipment() { return equipment; }
     public void setEquipment(String equipment) { this.equipment = equipment; }
+
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 
     public Integer getTargetSets() { return targetSets; }
     public void setTargetSets(Integer targetSets) { this.targetSets = targetSets; }

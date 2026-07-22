@@ -64,6 +64,7 @@ public class WorkoutLoggingService {
                 entry.setTargetReps(ex.getReps());
                 entry.setDurationSeconds(ex.getDurationSeconds());
                 entry.setRestSeconds(ex.getRestSeconds());
+                entry.setImageUrl(ex.getImageUrl());
                 entry.setOrderIndex(ex.getOrderIndex());
                 session.getLogEntries().add(entry);
             }
@@ -299,6 +300,7 @@ public class WorkoutLoggingService {
         dto.setDurationSeconds(entry.getDurationSeconds());
         dto.setRestSeconds(entry.getRestSeconds());
         dto.setOrderIndex(entry.getOrderIndex());
+        dto.setImageUrl(entry.getImageUrl());
         dto.setNotes(entry.getNotes());
         dto.setLoggedAt(entry.getLoggedAt());
         return dto;

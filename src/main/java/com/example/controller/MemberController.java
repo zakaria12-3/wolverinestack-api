@@ -446,6 +446,69 @@ public class MemberController {
         ));
     }
 
+    // ========== Quick Log (catch up on yesterday) ==========
+
+    /**
+     * Check if yesterday had any logged meals or workouts.
+     * Returns what's missing so the dashboard can show quick-log prompts.
+     */
+    @GetMapping("/quick-log/status")
+    public ResponseEntity<Map<String, Object>> getQuickLogStatus(Authentication authentication) {
+        String email = authentication.getName();
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+
+        List<WorkoutSessionDto> yesterdaySessions = workoutLoggingService.getSessionsForDateRange(email, yesterday, yesterday);
+        boolean hadWorkout = yesterdaySessions != null && yesterdaySessions.stream()
+                .anyMatch(s -> Boolean.TRUE.equals(s.getCompleted()));
+
+        Map<String, Object> yesterdayMeals = nutritionService.getDailyNutritionSummary(email, yesterday);
+        int mealCount = yesterdayMeals.get("mealCount") instanceof Number n ? n.intValue() : 0;
+
+        return ResponseEntity.ok(Map.of(
+                "date", yesterday.toString(),
+                "missedWorkout", !hadWorkout,
+                "missedMeals", mealCount <= 0,
+                "mealCount", mealCount
+        ));
+    }
+
+    /** Quick-log a placeholder workout session for yesterday */
+    @PostMapping("/quick-log/workout")
+    public ResponseEntity<Map<String, Object>> quickLogWorkout(Authentication authentication) {
+        String email = authentication.getName();
+        WorkoutSessionDto session = workoutLoggingService.startSession(
+                email, "Quick Catch-up", null
+        );
+        workoutLoggingService.completeSession(
+                session.getId(), email, Map.of(
+                        "durationMinutes", 0,
+                        "caloriesBurned", 0,
+                        "notes", "Quick-logged from dashboard — missed yesterday"
+                )
+        );
+        return ResponseEntity.ok(Map.of(
+                "message", "Workout logged for yesterday! 💪"
+        ));
+    }
+
+    /** Quick-log a placeholder meal entry for yesterday */
+    @PostMapping("/quick-log/meal")
+    public ResponseEntity<Map<String, Object>> quickLogMeal(Authentication authentication) throws Exception {
+        String email = authentication.getName();
+        LogMealRequestDto dto = new LogMealRequestDto();
+        dto.setMealType("SNACK");
+        dto.setFoodName("Quick Catch-up Meal");
+        dto.setDescription("Quick-logged from dashboard — missed yesterday");
+        dto.setQuantity(1.0);
+        dto.setUnit("meal");
+
+        MealLogResponseDto meal = nutritionService.logMeal(dto, email);
+        return ResponseEntity.ok(Map.of(
+                "message", "Meal logged for yesterday! 🥗",
+                "mealId", meal.getMealEntryId()
+        ));
+    }
+
     /** Toggle daily nutrition tips on/off */
     @PostMapping("/tips/toggle")
     public ResponseEntity<Map<String, Object>> toggleDailyTip(
