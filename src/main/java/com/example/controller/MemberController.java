@@ -287,6 +287,13 @@ public class MemberController {
     }
 
     // ========== Workout plans ==========
+    @GetMapping("/plans")
+    public List<WorkoutPlanDto> getPlans() {
+        return workoutPlanService.getAllPlans().stream()
+                .map(plan -> workoutPlanService.getPlanDtoById(plan.getId()))
+                .toList();
+    }
+
     @GetMapping("/plans/{planId}")
     public WorkoutPlanDto getPlan(@PathVariable Long planId) {
         return workoutPlanService.getPlanDtoById(planId);
