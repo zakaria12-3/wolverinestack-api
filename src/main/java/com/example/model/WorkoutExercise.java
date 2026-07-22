@@ -24,6 +24,8 @@ public class WorkoutExercise {
 
     private String muscleGroup;
     private String equipment;
+    @Column(name = "image_url")
+    private String imageUrl;
 
     private Integer orderIndex;
 
@@ -60,6 +62,9 @@ public class WorkoutExercise {
 
     public String getEquipment() { return equipment; }
     public void setEquipment(String equipment) { this.equipment = equipment; }
+
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 
     public Integer getOrderIndex() { return orderIndex; }
     public void setOrderIndex(Integer orderIndex) { this.orderIndex = orderIndex; }

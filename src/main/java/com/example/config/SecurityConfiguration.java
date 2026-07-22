@@ -45,7 +45,7 @@ public class SecurityConfiguration {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
 
-                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers("/auth/signup", "/auth/login", "/auth/verify", "/auth/resend", "/auth/forgot-password", "/auth/forgot-password/verify", "/auth/reset-password", "/auth/onboarding/suggest-goals").permitAll()
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/files/**").authenticated()
                         .requestMatchers("/admin/**").hasRole("ADMIN")

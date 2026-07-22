@@ -15,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -286,17 +285,59 @@ public class MemberController {
         );
     }
 
-    // ========== Workout plans ==========
+    // ========== Workout Plan CRUD ==========
+
+    /** Get all plans available to the member (their own + trainer-created) */
     @GetMapping("/plans")
-    public List<WorkoutPlanDto> getPlans() {
-        return workoutPlanService.getAllPlans().stream()
-                .map(plan -> workoutPlanService.getPlanDtoById(plan.getId()))
-                .toList();
+    public List<WorkoutPlanDto> getPlans(Authentication authentication) {
+        return workoutPlanService.getPlansForMember(authentication.getName());
     }
 
     @GetMapping("/plans/{planId}")
     public WorkoutPlanDto getPlan(@PathVariable Long planId) {
         return workoutPlanService.getPlanDtoById(planId);
+    }
+
+    /** Create a new workout plan (owned by this member) */
+    @PostMapping("/plans")
+    public WorkoutPlanDto createPlan(@RequestBody CreateWorkoutPlanDto dto,
+                                     Authentication authentication) {
+        return workoutPlanService.createPlanForMember(authentication.getName(), dto);
+    }
+
+    /** Update a workout plan (must be owned by this member) */
+    @PutMapping("/plans/{planId}")
+    public WorkoutPlanDto updatePlan(@PathVariable Long planId,
+                                     @RequestBody CreateWorkoutPlanDto dto,
+                                     Authentication authentication) {
+        return workoutPlanService.updatePlanForMember(planId, authentication.getName(), dto);
+    }
+
+    /** Delete a workout plan (must be owned by this member) */
+    @DeleteMapping("/plans/{planId}")
+    public ResponseEntity<?> deletePlan(@PathVariable Long planId,
+                                        Authentication authentication) {
+        workoutPlanService.deletePlanForMember(planId, authentication.getName());
+        return ResponseEntity.ok().build();
+    }
+
+    /** Generate an AI-powered workout plan draft */
+    @PostMapping("/plans/generate")
+    public ResponseEntity<?> generatePlan(@RequestBody Map<String, Object> body) {
+        try {
+            String goal = (String) body.getOrDefault("goal", "general_fitness");
+            String difficulty = (String) body.getOrDefault("difficulty", "beginner");
+            int weeks = body.get("durationWeeks") instanceof Number n ? n.intValue() : 4;
+            int sessions = body.get("sessionsPerWeek") instanceof Number n ? n.intValue() : 3;
+            return ResponseEntity.ok(
+                    workoutPlanService.generatePlanDraft(goal, difficulty, weeks, sessions)
+            );
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", e.getMessage(),
+                    "hint", "If the error mentions 'no JSON found', the AI model returned plain text. Try again."
+            ));
+        }
     }
 
     // ========== Workout Session Logging ==========

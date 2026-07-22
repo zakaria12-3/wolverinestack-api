@@ -55,6 +55,23 @@ public class WorkoutPlanService {
                 .orElseThrow(() -> new RuntimeException("Workout plan not found"));
     }
 
+    public List<WorkoutPlanDto> getPlansForMember(String email) {
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Return plans owned by this member AND plans created by trainers (for browsing)
+        List<WorkoutPlan> allPlans = workoutPlanRepository.findAll();
+        return allPlans.stream()
+                .filter(plan -> plan.getTrainer() == null || plan.getTrainer().getId().equals(member.getId()))
+                .map(plan -> {
+                    List<ExerciseDto> exerciseDtos = plan.getExercises().stream()
+                            .map(this::mapToExerciseDto)
+                            .toList();
+                    return mapToPlanDto(plan, exerciseDtos);
+                })
+                .toList();
+    }
+
     public WorkoutPlanDto getPlanDtoById(Long planId) {
         WorkoutPlan plan = getPlanEntityById(planId);
         List<ExerciseDto> exerciseDtos = plan.getExercises().stream()
@@ -67,6 +84,86 @@ public class WorkoutPlanService {
         User trainer = userRepository.findById(dto.getTrainerId())
                 .orElseThrow(() -> new RuntimeException("Trainer not found"));
 
+        WorkoutPlan plan = buildPlanFromDto(dto);
+        plan.setTrainer(trainer);
+        return workoutPlanRepository.save(plan);
+    }
+
+    /** Member creates their own workout plan */
+    public WorkoutPlanDto createPlanForMember(String email, CreateWorkoutPlanDto dto) {
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        WorkoutPlan plan = buildPlanFromDto(dto);
+        plan.setTrainer(member);
+        WorkoutPlan saved = workoutPlanRepository.save(plan);
+
+        List<ExerciseDto> exerciseDtos = saved.getExercises().stream()
+                .map(this::mapToExerciseDto)
+                .toList();
+        return mapToPlanDto(saved, exerciseDtos);
+    }
+
+    /** Member updates their own workout plan */
+    public WorkoutPlanDto updatePlanForMember(Long planId, String email, CreateWorkoutPlanDto dto) {
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        WorkoutPlan plan = getPlanEntityById(planId);
+        if (plan.getTrainer() == null || !plan.getTrainer().getId().equals(member.getId())) {
+            throw new RuntimeException("Not allowed to edit this plan");
+        }
+
+        // Update fields
+        plan.setName(dto.getName());
+        plan.setDescription(dto.getDescription());
+        plan.setGoal(dto.getGoal() != null ? FitnessGoal.valueOf(dto.getGoal().toUpperCase()) : null);
+        plan.setDifficulty(dto.getDifficulty());
+        plan.setDurationWeeks(dto.getDurationWeeks());
+        plan.setSessionsPerWeek(dto.getSessionsPerWeek());
+        plan.setEstimatedDailyCalories(dto.getEstimatedDailyCalories());
+
+        // Replace exercises
+        plan.getExercises().clear();
+        if (dto.getExercises() != null) {
+            for (ExerciseDto exDto : dto.getExercises()) {
+                WorkoutExercise ex = new WorkoutExercise();
+                ex.setExerciseName(exDto.getExerciseName());
+                ex.setDescription(exDto.getDescription());
+                ex.setInstructions(exDto.getInstructions());
+                ex.setSets(exDto.getSets());
+                ex.setReps(exDto.getReps());
+                ex.setDurationSeconds(exDto.getDurationSeconds());
+                ex.setRestSeconds(exDto.getRestSeconds());
+                ex.setMuscleGroup(exDto.getMuscleGroup());
+                ex.setEquipment(exDto.getEquipment());
+                ex.setOrderIndex(exDto.getOrderIndex());
+                ex.setWorkoutPlan(plan);
+                plan.getExercises().add(ex);
+            }
+        }
+
+        WorkoutPlan saved = workoutPlanRepository.save(plan);
+        List<ExerciseDto> exerciseDtos = saved.getExercises().stream()
+                .map(this::mapToExerciseDto)
+                .toList();
+        return mapToPlanDto(saved, exerciseDtos);
+    }
+
+    /** Member deletes their own workout plan */
+    public void deletePlanForMember(Long planId, String email) {
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        WorkoutPlan plan = getPlanEntityById(planId);
+        if (plan.getTrainer() == null || !plan.getTrainer().getId().equals(member.getId())) {
+            throw new RuntimeException("Not allowed to delete this plan");
+        }
+
+        workoutPlanRepository.delete(plan);
+    }
+
+    private WorkoutPlan buildPlanFromDto(CreateWorkoutPlanDto dto) {
         WorkoutPlan plan = new WorkoutPlan();
         plan.setName(dto.getName());
         plan.setDescription(dto.getDescription());
@@ -75,7 +172,6 @@ public class WorkoutPlanService {
         plan.setDurationWeeks(dto.getDurationWeeks());
         plan.setSessionsPerWeek(dto.getSessionsPerWeek());
         plan.setEstimatedDailyCalories(dto.getEstimatedDailyCalories());
-        plan.setTrainer(trainer);
 
         List<WorkoutExercise> exercises = new ArrayList<>();
         if (dto.getExercises() != null) {
@@ -91,13 +187,14 @@ public class WorkoutPlanService {
                 ex.setMuscleGroup(exDto.getMuscleGroup());
                 ex.setEquipment(exDto.getEquipment());
                 ex.setOrderIndex(exDto.getOrderIndex());
+                ex.setImageUrl(exDto.getImageUrl());
                 ex.setWorkoutPlan(plan);
                 exercises.add(ex);
             }
         }
 
         plan.setExercises(exercises);
-        return workoutPlanRepository.save(plan);
+        return plan;
     }
 
     public WorkoutPlanDto generatePlanDraft(String goal, String difficulty,
@@ -172,6 +269,7 @@ public class WorkoutPlanService {
         dto.setRestSeconds(ex.getRestSeconds());
         dto.setMuscleGroup(ex.getMuscleGroup());
         dto.setEquipment(ex.getEquipment());
+        dto.setImageUrl(ex.getImageUrl());
         dto.setOrderIndex(ex.getOrderIndex());
         return dto;
     }
