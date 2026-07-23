@@ -503,6 +503,20 @@ public class MemberController {
         return ResponseEntity.ok(workoutLoggingService.getWorkoutSummary(authentication.getName()));
     }
 
+    /** Get all-time best PRs for every exercise */
+    @GetMapping("/progress/overview")
+    public ResponseEntity<List<PersonalRecordDto>> getPrOverview(Authentication authentication) {
+        return ResponseEntity.ok(workoutLoggingService.getPrOverview(authentication.getName()));
+    }
+
+    /** Get 1RM progression chart data (daily best 1RM per exercise) */
+    @GetMapping("/progress/chart/{exerciseName}")
+    public ResponseEntity<List<Map<String, Object>>> getProgressionChart(
+            @PathVariable String exerciseName,
+            Authentication authentication) {
+        return ResponseEntity.ok(workoutLoggingService.getProgressionChart(authentication.getName(), exerciseName));
+    }
+
     // ========== Daily Nutrition Tips ==========
 
     /** Get current daily tip enabled status */

@@ -380,6 +380,52 @@ public class WorkoutLoggingService {
         dto.setPreviousBestReps(previousBest.getPreviousBestReps());
     }
 
+    /** Get all-time best PRs for every exercise the member has logged */
+    public List<PersonalRecordDto> getPrOverview(String email) {
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<Object[]> rawData = sessionRepository.findAllTimeBestPerExercise(member.getId());
+        List<PersonalRecordDto> results = new ArrayList<>();
+
+        for (Object[] row : rawData) {
+            PersonalRecordDto dto = new PersonalRecordDto();
+            dto.setExerciseName(row[0] != null ? row[0].toString() : "Unknown");
+            dto.setMuscleGroup(row[1] != null ? row[1].toString() : null);
+            dto.setEquipment(row[2] != null ? row[2].toString() : null);
+            if (row[3] instanceof Number n) dto.setBestWeightKg(n.doubleValue());
+            if (row[4] instanceof Number n) dto.setBestReps(n.intValue());
+            if (row[5] instanceof Number n) dto.setEstimatedOneRm(n.intValue());
+            if (row[6] instanceof java.sql.Timestamp ts) dto.setAchievedDate(ts.toLocalDateTime().toLocalDate());
+            if (row[7] instanceof Number n) dto.setSessionId(n.longValue());
+            if (row[8] != null) dto.setSessionName(row[8].toString());
+            if (row[9] instanceof Number n) dto.setTotalSessionsLogged(n.intValue());
+            if (row[10] instanceof Number n) dto.setTotalSetsLogged(n.intValue());
+            results.add(dto);
+        }
+
+        return results;
+    }
+
+    /** Get 1RM progression data points for an exercise chart */
+    public List<Map<String, Object>> getProgressionChart(String email, String exerciseName) {
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<Object[]> rawData = sessionRepository.findProgressionForExerciseChart(member.getId(), exerciseName);
+        List<Map<String, Object>> points = new ArrayList<>();
+
+        for (Object[] row : rawData) {
+            Map<String, Object> point = new HashMap<>();
+            point.put("exerciseName", row[0] != null ? row[0].toString() : "Unknown");
+            if (row[1] instanceof java.sql.Date d) point.put("date", d.toLocalDate().toString());
+            if (row[2] instanceof Number n) point.put("estimatedOneRm", n.intValue());
+            points.add(point);
+        }
+
+        return points;
+    }
+
     /** Get workout summary stats */
     public Map<String, Object> getWorkoutSummary(String email) {
         User member = userRepository.findByEmail(email)
