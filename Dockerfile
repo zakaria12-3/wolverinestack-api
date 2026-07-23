@@ -35,11 +35,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
 COPY --from=build /app/build/libs/app.jar app.jar
 
 # Expose the port
-EXPOSE 8027
+# Railway injects PORT at runtime; default 8080 for local dev
+EXPOSE 8080
 
-# Healthcheck (matches application.properties default port 8027)
+# Healthcheck: reads Railway's PORT env or falls back to 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8027}/actuator/health || exit 1
+  CMD curl -f http://localhost:${PORT:-8080}/actuator/health || exit 1
 
 # Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
