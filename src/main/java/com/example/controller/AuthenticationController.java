@@ -16,6 +16,7 @@ import com.example.service.FitnessAIService;
 import com.example.service.JwtService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -129,15 +130,17 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginUserDto dto) {
-
-        User user = authenticationService.authenticate(dto);
-
-        String token = jwtService.generateToken(user);;
-
-        return ResponseEntity.ok(
-                new LoginResponse(token, jwtService.getExpirationTime())
-        );
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginUserDto dto) {
+        try {
+            User user = authenticationService.authenticate(dto);
+            String token = jwtService.generateToken(user);
+            return ResponseEntity.ok(
+                    new LoginResponse(token, jwtService.getExpirationTime())
+            );
+        } catch (RuntimeException e) {
+            // Return generic error to prevent user enumeration
+            throw new BadCredentialsException("Invalid email or password");
+        }
     }
 
     @PostMapping("/verify")

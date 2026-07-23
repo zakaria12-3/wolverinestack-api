@@ -14,4 +14,6 @@ public interface MealEntryRepository extends JpaRepository<MealEntry, Long> {
             Long memberId, LocalDateTime start, LocalDateTime end);
 
     boolean existsByMemberIdAndLoggedAt(Long memberId, LocalDateTime loggedAt);
+
+    void deleteByMemberId(Long memberId);
 }

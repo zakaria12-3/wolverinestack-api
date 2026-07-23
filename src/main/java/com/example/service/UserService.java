@@ -47,7 +47,8 @@ public class UserService {
     public void deleteUser(Long id) {
         User user = findById(id);
         if (user.getRole() == Role.ROLE_MEMBER) {
-            mealEntryRepository.deleteById(id);
+            // Delete all meal entries belonging to this user
+            mealEntryRepository.deleteByMemberId(id);
         } else if (user.getRole() == Role.ROLE_TRAINER) {
             List<com.example.model.Workout> trainerWorkouts = workoutService.getWorkoutsByTrainer(id);
             for(com.example.model.Workout workout : trainerWorkouts) {
