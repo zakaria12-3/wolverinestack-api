@@ -36,7 +36,7 @@ public class WorkoutSession {
 
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("orderIndex ASC")
-    private List<WorkoutLogEntry> logEntries = new ArrayList<>();
+    private List<WorkoutSessionExercise> sessionExercises = new ArrayList<>();
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -74,6 +74,6 @@ public class WorkoutSession {
     public Integer getRating() { return rating; }
     public void setRating(Integer rating) { this.rating = rating; }
 
-    public List<WorkoutLogEntry> getLogEntries() { return logEntries; }
-    public void setLogEntries(List<WorkoutLogEntry> logEntries) { this.logEntries = logEntries; }
+    public List<WorkoutSessionExercise> getSessionExercises() { return sessionExercises; }
+    public void setSessionExercises(List<WorkoutSessionExercise> sessionExercises) { this.sessionExercises = sessionExercises; }
 }

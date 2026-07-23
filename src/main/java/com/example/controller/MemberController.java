@@ -363,14 +363,74 @@ public class MemberController {
         );
     }
 
-    /** Log an exercise in an active session */
-    @PostMapping("/sessions/{sessionId}/log")
-    public ResponseEntity<WorkoutSessionDto> logExercise(
+    /** Add an exercise to an active session (shell — sets are added separately) */
+    @PostMapping("/sessions/{sessionId}/exercises")
+    public ResponseEntity<WorkoutSessionDto> addExercise(
             @PathVariable Long sessionId,
             @RequestBody LogExerciseRequestDto request,
             Authentication authentication) {
         return ResponseEntity.ok(
-                workoutLoggingService.logExercise(sessionId, authentication.getName(), request)
+                workoutLoggingService.addExerciseToSession(sessionId, authentication.getName(), request)
+        );
+    }
+
+    /** Remove an exercise from an active session */
+    @DeleteMapping("/sessions/{sessionId}/exercises/{exerciseId}")
+    public ResponseEntity<WorkoutSessionDto> removeExercise(
+            @PathVariable Long sessionId,
+            @PathVariable Long exerciseId,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                workoutLoggingService.removeExerciseFromSession(sessionId, exerciseId, authentication.getName())
+        );
+    }
+
+    /** Log a single set to a session exercise (Hevy-style) */
+    @PostMapping("/sessions/{sessionId}/exercises/{exerciseId}/sets")
+    public ResponseEntity<SessionExerciseDto> logSet(
+            @PathVariable Long sessionId,
+            @PathVariable Long exerciseId,
+            @RequestBody LogSetRequestDto request,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                workoutLoggingService.logSet(sessionId, exerciseId, authentication.getName(), request)
+        );
+    }
+
+    /** Update an existing set */
+    @PutMapping("/sessions/{sessionId}/exercises/{exerciseId}/sets/{setId}")
+    public ResponseEntity<SessionExerciseDto> updateSet(
+            @PathVariable Long sessionId,
+            @PathVariable Long exerciseId,
+            @PathVariable Long setId,
+            @RequestBody LogSetRequestDto request,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                workoutLoggingService.updateSet(sessionId, exerciseId, setId, authentication.getName(), request)
+        );
+    }
+
+    /** Delete a single set */
+    @DeleteMapping("/sessions/{sessionId}/exercises/{exerciseId}/sets/{setId}")
+    public ResponseEntity<SessionExerciseDto> deleteSet(
+            @PathVariable Long sessionId,
+            @PathVariable Long exerciseId,
+            @PathVariable Long setId,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                workoutLoggingService.deleteSet(sessionId, exerciseId, setId, authentication.getName())
+        );
+    }
+
+    /** Bulk-log multiple sets at once (for fast entry) */
+    @PostMapping("/sessions/{sessionId}/exercises/{exerciseId}/sets/bulk")
+    public ResponseEntity<SessionExerciseDto> bulkLogSets(
+            @PathVariable Long sessionId,
+            @PathVariable Long exerciseId,
+            @RequestBody List<LogSetRequestDto> requests,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                workoutLoggingService.bulkLogSets(sessionId, exerciseId, authentication.getName(), requests)
         );
     }
 

@@ -8,11 +8,16 @@ public class WorkoutLogEntryDto {
     private String muscleGroup;
     private String equipment;
     private String imageUrl;
+
+    // Target from plan
     private Integer targetSets;
     private Integer targetReps;
-    private Integer actualSets;
-    private Integer actualReps;
+
+    // Computed from sets
+    private int actualSets;
+    private int actualReps;
     private Double weightKg;
+
     private Integer durationSeconds;
     private Integer restSeconds;
     private Integer orderIndex;
@@ -40,11 +45,11 @@ public class WorkoutLogEntryDto {
     public Integer getTargetReps() { return targetReps; }
     public void setTargetReps(Integer targetReps) { this.targetReps = targetReps; }
 
-    public Integer getActualSets() { return actualSets; }
-    public void setActualSets(Integer actualSets) { this.actualSets = actualSets; }
+    public int getActualSets() { return actualSets; }
+    public void setActualSets(int actualSets) { this.actualSets = actualSets; }
 
-    public Integer getActualReps() { return actualReps; }
-    public void setActualReps(Integer actualReps) { this.actualReps = actualReps; }
+    public int getActualReps() { return actualReps; }
+    public void setActualReps(int actualReps) { this.actualReps = actualReps; }
 
     public Double getWeightKg() { return weightKg; }
     public void setWeightKg(Double weightKg) { this.weightKg = weightKg; }

@@ -23,27 +23,28 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, 
     boolean existsByWorkoutPlanIdAndMemberId(Long planId, Long memberId);
 
     @Query(value = """
-            SELECT le.exercise_name AS exerciseName,
-                   le.logged_at AS loggedAt,
-                   le.weight_kg AS weightKg,
-                   le.actual_reps AS reps,
-                   le.actual_sets AS sets
-            FROM workout_log_entries le
-            JOIN workout_sessions ws ON le.session_id = ws.id
+            SELECT wse.exercise_name AS exerciseName,
+                   es.logged_at AS loggedAt,
+                   es.weight_kg AS weightKg,
+                   es.reps AS reps,
+                   es.set_index AS sets
+            FROM exercise_sets es
+            JOIN workout_session_exercises wse ON es.session_exercise_id = wse.id
+            JOIN workout_sessions ws ON wse.session_id = ws.id
             WHERE ws.member_id = :memberId
-              AND le.exercise_name = :exerciseName
-              AND le.weight_kg IS NOT NULL
-            ORDER BY le.logged_at ASC
+              AND wse.exercise_name = :exerciseName
+              AND es.weight_kg IS NOT NULL
+            ORDER BY es.logged_at ASC
             """, nativeQuery = true)
     List<Object[]> findProgressForExercise(@Param("memberId") Long memberId,
                                            @Param("exerciseName") String exerciseName);
 
     @Query(value = """
-            SELECT DISTINCT le.exercise_name
-            FROM workout_log_entries le
-            JOIN workout_sessions ws ON le.session_id = ws.id
+            SELECT DISTINCT wse.exercise_name
+            FROM workout_session_exercises wse
+            JOIN workout_sessions ws ON wse.session_id = ws.id
             WHERE ws.member_id = :memberId
-            ORDER BY le.exercise_name ASC
+            ORDER BY wse.exercise_name ASC
             """, nativeQuery = true)
     List<String> findTrackedExercisesByMember(@Param("memberId") Long memberId);
 }

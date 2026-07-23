@@ -12,6 +12,7 @@ public class LogExerciseRequestDto {
     private Integer durationSeconds;
     private Integer restSeconds;
     private Integer orderIndex;
+    private String imageUrl;
     private String notes;
 
     public String getExerciseName() { return exerciseName; }
@@ -46,6 +47,9 @@ public class LogExerciseRequestDto {
 
     public Integer getOrderIndex() { return orderIndex; }
     public void setOrderIndex(Integer orderIndex) { this.orderIndex = orderIndex; }
+
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }

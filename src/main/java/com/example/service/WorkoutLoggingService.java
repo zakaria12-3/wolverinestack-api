@@ -2,9 +2,7 @@ package com.example.service;
 
 import com.example.dto.*;
 import com.example.model.*;
-import com.example.repository.UserRepository;
-import com.example.repository.WorkoutPlanRepository;
-import com.example.repository.WorkoutSessionRepository;
+import com.example.repository.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -12,10 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @Transactional
@@ -23,16 +18,26 @@ public class WorkoutLoggingService {
     private static final Logger LOGGER = LoggerFactory.getLogger(WorkoutLoggingService.class);
 
     private final WorkoutSessionRepository sessionRepository;
+    private final WorkoutSessionExerciseRepository sessionExerciseRepository;
+    private final ExerciseSetRepository exerciseSetRepository;
     private final WorkoutPlanRepository planRepository;
     private final UserRepository userRepository;
 
     public WorkoutLoggingService(WorkoutSessionRepository sessionRepository,
+                                 WorkoutSessionExerciseRepository sessionExerciseRepository,
+                                 ExerciseSetRepository exerciseSetRepository,
                                  WorkoutPlanRepository planRepository,
                                  UserRepository userRepository) {
         this.sessionRepository = sessionRepository;
+        this.sessionExerciseRepository = sessionExerciseRepository;
+        this.exerciseSetRepository = exerciseSetRepository;
         this.planRepository = planRepository;
         this.userRepository = userRepository;
     }
+
+    // ========================================================================
+    // SESSION MANAGEMENT
+    // ========================================================================
 
     /** Start a new workout session (optionally from a plan) */
     public WorkoutSessionDto startSession(String email, String sessionName, Long planId) {
@@ -52,21 +57,21 @@ public class WorkoutLoggingService {
         session.setStartedAt(LocalDateTime.now());
         session.setCompleted(false);
 
-        // If starting from a plan, pre-populate the exercises
+        // If starting from a plan, pre-populate the session exercises (without sets)
         if (plan != null && plan.getExercises() != null) {
             for (WorkoutExercise ex : plan.getExercises()) {
-                WorkoutLogEntry entry = new WorkoutLogEntry();
-                entry.setSession(session);
-                entry.setExerciseName(ex.getExerciseName());
-                entry.setMuscleGroup(ex.getMuscleGroup());
-                entry.setEquipment(ex.getEquipment());
-                entry.setTargetSets(ex.getSets());
-                entry.setTargetReps(ex.getReps());
-                entry.setDurationSeconds(ex.getDurationSeconds());
-                entry.setRestSeconds(ex.getRestSeconds());
-                entry.setImageUrl(ex.getImageUrl());
-                entry.setOrderIndex(ex.getOrderIndex());
-                session.getLogEntries().add(entry);
+                WorkoutSessionExercise sEx = new WorkoutSessionExercise();
+                sEx.setSession(session);
+                sEx.setExerciseName(ex.getExerciseName());
+                sEx.setMuscleGroup(ex.getMuscleGroup());
+                sEx.setEquipment(ex.getEquipment());
+                sEx.setTargetSets(ex.getSets());
+                sEx.setTargetReps(ex.getReps());
+                sEx.setDurationSeconds(ex.getDurationSeconds());
+                sEx.setRestSeconds(ex.getRestSeconds());
+                sEx.setImageUrl(ex.getImageUrl());
+                sEx.setOrderIndex(ex.getOrderIndex());
+                session.getSessionExercises().add(sEx);
             }
         }
 
@@ -74,29 +79,158 @@ public class WorkoutLoggingService {
         return toSessionDto(saved);
     }
 
-    /** Log an exercise within an active session */
-    public WorkoutSessionDto logExercise(Long sessionId, String email, LogExerciseRequestDto request) {
+    /** Log an exercise into an active session (Hevy-style: creates the exercise shell, sets are added separately) */
+    public WorkoutSessionDto addExerciseToSession(Long sessionId, String email, LogExerciseRequestDto request) {
         WorkoutSession session = validateSessionOwnership(sessionId, email);
 
-        WorkoutLogEntry entry = new WorkoutLogEntry();
-        entry.setSession(session);
-        entry.setExerciseName(request.getExerciseName());
-        entry.setMuscleGroup(request.getMuscleGroup());
-        entry.setEquipment(request.getEquipment());
-        entry.setTargetSets(request.getTargetSets());
-        entry.setTargetReps(request.getTargetReps());
-        entry.setActualSets(request.getActualSets());
-        entry.setActualReps(request.getActualReps());
-        entry.setWeightKg(request.getWeightKg());
-        entry.setDurationSeconds(request.getDurationSeconds());
-        entry.setRestSeconds(request.getRestSeconds());
-        entry.setOrderIndex(request.getOrderIndex());
-        entry.setNotes(request.getNotes());
+        WorkoutSessionExercise sEx = new WorkoutSessionExercise();
+        sEx.setSession(session);
+        sEx.setExerciseName(request.getExerciseName());
+        sEx.setMuscleGroup(request.getMuscleGroup());
+        sEx.setEquipment(request.getEquipment());
+        sEx.setImageUrl(request.getImageUrl());
+        sEx.setTargetSets(request.getTargetSets());
+        sEx.setTargetReps(request.getTargetReps());
+        sEx.setDurationSeconds(request.getDurationSeconds());
+        sEx.setRestSeconds(request.getRestSeconds());
+        sEx.setOrderIndex(request.getOrderIndex() != null ? request.getOrderIndex()
+                : session.getSessionExercises().size() + 1);
+        sEx.setNotes(request.getNotes());
 
-        session.getLogEntries().add(entry);
+        session.getSessionExercises().add(sEx);
         WorkoutSession saved = sessionRepository.save(session);
         return toSessionDto(saved);
     }
+
+    /** Remove an exercise from an active session */
+    public WorkoutSessionDto removeExerciseFromSession(Long sessionId, Long exerciseId, String email) {
+        WorkoutSession session = validateSessionOwnership(sessionId, email);
+        session.getSessionExercises().removeIf(ex -> ex.getId().equals(exerciseId));
+        WorkoutSession saved = sessionRepository.save(session);
+        return toSessionDto(saved);
+    }
+
+    // ========================================================================
+    // PER-SET LOGGING (Hevy-style core)
+    // ========================================================================
+
+    /** Log a single set to a session exercise */
+    public SessionExerciseDto logSet(Long sessionId, Long exerciseId, String email, LogSetRequestDto request) {
+        WorkoutSession session = validateSessionOwnership(sessionId, email);
+
+        WorkoutSessionExercise sEx = session.getSessionExercises().stream()
+                .filter(ex -> ex.getId().equals(exerciseId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Exercise not found in session"));
+
+        ExerciseSet set = new ExerciseSet();
+        set.setSessionExercise(sEx);
+        set.setSetIndex(sEx.getSets().size() + 1);
+        set.setSetType(request.getSetType() != null
+                ? ExerciseSet.SetType.valueOf(request.getSetType())
+                : ExerciseSet.SetType.NORMAL);
+        set.setWeightKg(request.getWeightKg());
+        set.setReps(request.getReps());
+        set.setRpe(request.getRpe());
+        set.setDurationSeconds(request.getDurationSeconds());
+        set.setDistanceMeters(request.getDistanceMeters());
+        set.setNotes(request.getNotes());
+
+        sEx.getSets().add(set);
+        sessionRepository.save(session);
+
+        // Check for PR
+        ExerciseSet savedSet = set;
+        ExerciseSetDto dto = toSetDto(savedSet);
+        checkAndSetPr(dto, sEx.getExerciseName(), session.getMember().getId());
+        return toSessionExerciseDto(sEx);
+    }
+
+    /** Update an existing set (weight, reps, RPE, etc.) */
+    public SessionExerciseDto updateSet(Long sessionId, Long exerciseId, Long setId,
+                                         String email, LogSetRequestDto request) {
+        WorkoutSession session = validateSessionOwnership(sessionId, email);
+        ExerciseSet set = exerciseSetRepository.findById(setId)
+                .orElseThrow(() -> new RuntimeException("Set not found"));
+
+        if (request.getSetType() != null)
+            set.setSetType(ExerciseSet.SetType.valueOf(request.getSetType()));
+        if (request.getWeightKg() != null)
+            set.setWeightKg(request.getWeightKg());
+        if (request.getReps() != null)
+            set.setReps(request.getReps());
+        if (request.getRpe() != null)
+            set.setRpe(request.getRpe());
+        if (request.getDurationSeconds() != null)
+            set.setDurationSeconds(request.getDurationSeconds());
+        if (request.getDistanceMeters() != null)
+            set.setDistanceMeters(request.getDistanceMeters());
+        if (request.getNotes() != null)
+            set.setNotes(request.getNotes());
+
+        exerciseSetRepository.save(set);
+
+        WorkoutSessionExercise sEx = session.getSessionExercises().stream()
+                .filter(ex -> ex.getId().equals(exerciseId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Exercise not found in session"));
+
+        return toSessionExerciseDto(sEx);
+    }
+
+    /** Delete a single set */
+    public SessionExerciseDto deleteSet(Long sessionId, Long exerciseId, Long setId, String email) {
+        WorkoutSession session = validateSessionOwnership(sessionId, email);
+
+        WorkoutSessionExercise sEx = session.getSessionExercises().stream()
+                .filter(ex -> ex.getId().equals(exerciseId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Exercise not found in session"));
+
+        sEx.getSets().removeIf(s -> s.getId().equals(setId));
+        // Re-index remaining sets
+        for (int i = 0; i < sEx.getSets().size(); i++) {
+            sEx.getSets().get(i).setSetIndex(i + 1);
+        }
+
+        sessionRepository.save(session);
+        return toSessionExerciseDto(sEx);
+    }
+
+    /** Quick-log: add a complete set of sets for an exercise (for fast logging) */
+    public SessionExerciseDto bulkLogSets(Long sessionId, Long exerciseId, String email,
+                                           List<LogSetRequestDto> requests) {
+        WorkoutSession session = validateSessionOwnership(sessionId, email);
+
+        WorkoutSessionExercise sEx = session.getSessionExercises().stream()
+                .filter(ex -> ex.getId().equals(exerciseId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Exercise not found in session"));
+
+        int nextIndex = sEx.getSets().size() + 1;
+        for (LogSetRequestDto req : requests) {
+            ExerciseSet set = new ExerciseSet();
+            set.setSessionExercise(sEx);
+            set.setSetIndex(nextIndex++);
+            set.setSetType(req.getSetType() != null
+                    ? ExerciseSet.SetType.valueOf(req.getSetType())
+                    : ExerciseSet.SetType.NORMAL);
+            set.setWeightKg(req.getWeightKg());
+            set.setReps(req.getReps());
+            set.setRpe(req.getRpe());
+            set.setDurationSeconds(req.getDurationSeconds());
+            set.setDistanceMeters(req.getDistanceMeters());
+            set.setNotes(req.getNotes());
+            sEx.getSets().add(set);
+        }
+
+        sessionRepository.save(session);
+        return toSessionExerciseDto(sEx);
+    }
+
+    // ========================================================================
+    // SESSION COMPLETION
+    // ========================================================================
 
     /** Complete a workout session */
     public WorkoutSessionDto completeSession(Long sessionId, String email, Map<String, Object> completionData) {
@@ -118,7 +252,6 @@ public class WorkoutLoggingService {
                 session.setRating(n.intValue());
         }
 
-        // Calculate duration if not provided
         if (session.getDurationMinutes() == null && session.getStartedAt() != null) {
             long minutes = java.time.Duration.between(session.getStartedAt(), LocalDateTime.now()).toMinutes();
             session.setDurationMinutes(Math.max(1, (int) minutes));
@@ -128,11 +261,14 @@ public class WorkoutLoggingService {
         return toSessionDto(saved);
     }
 
+    // ========================================================================
+    // QUERIES
+    // ========================================================================
+
     /** Get all sessions for the current member */
     public List<WorkoutSessionDto> getMySessions(String email) {
         User member = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
         return sessionRepository.findByMemberIdOrderByStartedAtDesc(member.getId())
                 .stream()
                 .map(this::toSessionDto)
@@ -149,7 +285,6 @@ public class WorkoutLoggingService {
     public List<WorkoutSessionDto> getSessionsForDateRange(String email, LocalDate start, LocalDate end) {
         User member = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
         return sessionRepository.findByMemberIdAndStartedAtBetweenOrderByStartedAtAsc(
                         member.getId(),
                         start.atStartOfDay(),
@@ -165,6 +300,10 @@ public class WorkoutLoggingService {
         sessionRepository.delete(session);
     }
 
+    // ========================================================================
+    // PROGRESS & PR TRACKING
+    // ========================================================================
+
     /** Get progress data for a specific exercise */
     public ProgressDataDto getProgress(String email, String exerciseName) {
         User member = userRepository.findByEmail(email)
@@ -178,22 +317,18 @@ public class WorkoutLoggingService {
 
         for (Object[] row : rawData) {
             ProgressDataDto.ProgressPoint point = new ProgressDataDto.ProgressPoint();
-            // row[0] is exerciseName (same for all points, set on the DTO)
             if (row[1] instanceof java.sql.Timestamp ts)
                 point.setDate(ts.toLocalDateTime().toLocalDate());
             if (row[2] instanceof Number n) point.setWeightKg(n.doubleValue());
             if (row[3] instanceof Number n) point.setReps(n.intValue());
             if (row[4] instanceof Number n) point.setSets(n.intValue());
 
-            // Estimate 1RM using Epley formula: weight * (1 + reps/30)
             if (point.getWeightKg() != null && point.getReps() != null && point.getReps() > 0) {
                 int estimatedOneRm = (int) Math.round(point.getWeightKg() * (1.0 + point.getReps() / 30.0));
                 point.setEstimatedOneRm(estimatedOneRm);
             }
-
             result.getProgressPoints().add(point);
         }
-
         return result;
     }
 
@@ -204,7 +339,48 @@ public class WorkoutLoggingService {
         return sessionRepository.findTrackedExercisesByMember(member.getId());
     }
 
-    /** Get summary stats for the member */
+    /** Get the previous best set (by 1RM estimate) for an exercise */
+    private ExerciseSetDto getPreviousBest(String exerciseName, Long memberId) {
+        List<Object[]> rawData = sessionRepository.findProgressForExercise(memberId, exerciseName);
+        if (rawData.isEmpty()) return null;
+
+        double best1RM = 0;
+        ExerciseSetDto best = null;
+
+        for (Object[] row : rawData) {
+            Double weight = row[2] instanceof Number n ? n.doubleValue() : null;
+            Integer reps = row[3] instanceof Number n ? n.intValue() : null;
+            if (weight == null || reps == null || reps <= 0) continue;
+
+            double e1rm = weight * (1.0 + reps / 30.0);
+            if (e1rm > best1RM) {
+                best1RM = e1rm;
+                best = new ExerciseSetDto();
+                best.setPreviousBestWeight(weight);
+                best.setPreviousBestReps(reps);
+            }
+        }
+        return best;
+    }
+
+    private void checkAndSetPr(ExerciseSetDto dto, String exerciseName, Long memberId) {
+        if (dto.getWeightKg() == null || dto.getReps() == null || dto.getReps() <= 0) return;
+
+        ExerciseSetDto previousBest = getPreviousBest(exerciseName, memberId);
+        if (previousBest == null) {
+            dto.setIsPersonalRecord(true);
+            return;
+        }
+
+        double current1RM = dto.getWeightKg() * (1.0 + dto.getReps() / 30.0);
+        double previous1RM = previousBest.getPreviousBestWeight() * (1.0 + previousBest.getPreviousBestReps() / 30.0);
+
+        dto.setIsPersonalRecord(current1RM >= previous1RM);
+        dto.setPreviousBestWeight(previousBest.getPreviousBestWeight());
+        dto.setPreviousBestReps(previousBest.getPreviousBestReps());
+    }
+
+    /** Get workout summary stats */
     public Map<String, Object> getWorkoutSummary(String email) {
         User member = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -213,7 +389,6 @@ public class WorkoutLoggingService {
         List<WorkoutSession> recentSessions = sessionRepository
                 .findByMemberIdAndCompletedTrueOrderByStartedAtDesc(member.getId());
 
-        // Weekly stats
         LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
         long sessionsThisWeek = recentSessions.stream()
                 .filter(s -> s.getStartedAt() != null && s.getStartedAt().isAfter(weekAgo))
@@ -239,21 +414,9 @@ public class WorkoutLoggingService {
         );
     }
 
-    // --- Helper methods ---
-
-    private WorkoutSession validateSessionOwnership(Long sessionId, String email) {
-        WorkoutSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Workout session not found"));
-
-        User member = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (!session.getMember().getId().equals(member.getId())) {
-            throw new RuntimeException("Not allowed to access this workout session");
-        }
-
-        return session;
-    }
+    // ========================================================================
+    // DTO CONVERSION
+    // ========================================================================
 
     private WorkoutSessionDto toSessionDto(WorkoutSession session) {
         WorkoutSessionDto dto = new WorkoutSessionDto();
@@ -273,36 +436,79 @@ public class WorkoutLoggingService {
             dto.setPlanName(session.getWorkoutPlan().getName());
         }
 
-        if (session.getLogEntries() != null) {
-            dto.setTotalExercises(session.getLogEntries().size());
-            dto.setCompletedExercises((int) session.getLogEntries().stream()
-                    .filter(e -> e.getActualSets() != null || e.getActualReps() != null)
+        if (session.getSessionExercises() != null) {
+            dto.setTotalExercises(session.getSessionExercises().size());
+            dto.setCompletedExercises((int) session.getSessionExercises().stream()
+                    .filter(ex -> ex.getCompletedSetCount() > 0)
                     .count());
-            dto.setLogEntries(session.getLogEntries().stream()
-                    .map(this::toLogEntryDto)
+            dto.setSessionExercises(session.getSessionExercises().stream()
+                    .map(this::toSessionExerciseDto)
                     .toList());
         }
 
         return dto;
     }
 
-    private WorkoutLogEntryDto toLogEntryDto(WorkoutLogEntry entry) {
-        WorkoutLogEntryDto dto = new WorkoutLogEntryDto();
-        dto.setId(entry.getId());
-        dto.setExerciseName(entry.getExerciseName());
-        dto.setMuscleGroup(entry.getMuscleGroup());
-        dto.setEquipment(entry.getEquipment());
-        dto.setTargetSets(entry.getTargetSets());
-        dto.setTargetReps(entry.getTargetReps());
-        dto.setActualSets(entry.getActualSets());
-        dto.setActualReps(entry.getActualReps());
-        dto.setWeightKg(entry.getWeightKg());
-        dto.setDurationSeconds(entry.getDurationSeconds());
-        dto.setRestSeconds(entry.getRestSeconds());
-        dto.setOrderIndex(entry.getOrderIndex());
-        dto.setImageUrl(entry.getImageUrl());
-        dto.setNotes(entry.getNotes());
-        dto.setLoggedAt(entry.getLoggedAt());
+    private SessionExerciseDto toSessionExerciseDto(WorkoutSessionExercise ex) {
+        SessionExerciseDto dto = new SessionExerciseDto();
+        dto.setId(ex.getId());
+        dto.setExerciseName(ex.getExerciseName());
+        dto.setMuscleGroup(ex.getMuscleGroup());
+        dto.setEquipment(ex.getEquipment());
+        dto.setImageUrl(ex.getImageUrl());
+        dto.setTargetSets(ex.getTargetSets());
+        dto.setTargetReps(ex.getTargetReps());
+        dto.setCompletedSetCount(ex.getCompletedSetCount());
+        dto.setTotalReps(ex.getTotalReps());
+        dto.setTotalVolume(ex.getTotalVolume());
+        dto.setDurationSeconds(ex.getDurationSeconds());
+        dto.setRestSeconds(ex.getRestSeconds());
+        dto.setOrderIndex(ex.getOrderIndex());
+        dto.setNotes(ex.getNotes());
+        dto.setLoggedAt(ex.getLoggedAt());
+
+        if (ex.getSets() != null) {
+            dto.setSets(ex.getSets().stream()
+                    .map(this::toSetDto)
+                    .toList());
+        }
+
+        // Check for previous best for PR indicator
+        if (ex.getSession() != null && ex.getSession().getMember() != null) {
+            Long memberId = ex.getSession().getMember().getId();
+            ExerciseSetDto previousBest = getPreviousBest(ex.getExerciseName(), memberId);
+            if (previousBest != null) {
+                dto.setPreviousBestWeight(previousBest.getPreviousBestWeight());
+                dto.setPreviousBestReps(previousBest.getPreviousBestReps());
+            }
+        }
+
         return dto;
+    }
+
+    private ExerciseSetDto toSetDto(ExerciseSet set) {
+        ExerciseSetDto dto = new ExerciseSetDto();
+        dto.setId(set.getId());
+        dto.setSetIndex(set.getSetIndex());
+        dto.setSetType(set.getSetType().name());
+        dto.setWeightKg(set.getWeightKg());
+        dto.setReps(set.getReps());
+        dto.setRpe(set.getRpe());
+        dto.setDurationSeconds(set.getDurationSeconds());
+        dto.setDistanceMeters(set.getDistanceMeters());
+        dto.setNotes(set.getNotes());
+        dto.setLoggedAt(set.getLoggedAt());
+        return dto;
+    }
+
+    private WorkoutSession validateSessionOwnership(Long sessionId, String email) {
+        WorkoutSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Workout session not found"));
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (!session.getMember().getId().equals(member.getId())) {
+            throw new RuntimeException("Not allowed to access this workout session");
+        }
+        return session;
     }
 }

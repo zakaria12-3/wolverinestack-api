@@ -18,7 +18,7 @@ public class WorkoutSessionDto {
     private Integer rating;
     private int totalExercises;
     private int completedExercises;
-    private List<WorkoutLogEntryDto> logEntries;
+    private List<SessionExerciseDto> sessionExercises;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -62,6 +62,6 @@ public class WorkoutSessionDto {
     public int getCompletedExercises() { return completedExercises; }
     public void setCompletedExercises(int completedExercises) { this.completedExercises = completedExercises; }
 
-    public List<WorkoutLogEntryDto> getLogEntries() { return logEntries; }
-    public void setLogEntries(List<WorkoutLogEntryDto> logEntries) { this.logEntries = logEntries; }
+    public List<SessionExerciseDto> getSessionExercises() { return sessionExercises; }
+    public void setSessionExercises(List<SessionExerciseDto> sessionExercises) { this.sessionExercises = sessionExercises; }
 }
