@@ -2,6 +2,7 @@ package com.example.controller;
 
 import com.example.dto.*;
 import com.example.model.User;
+import com.example.service.AIService;
 import com.example.service.BodyMeasurementService;
 import com.example.service.DashboardService;
 import com.example.service.MealPlannerService;
@@ -31,6 +32,7 @@ public class MemberController {
     private final BodyMeasurementService bodyMeasurementService;
     private final UserService userService;
     private final DashboardService dashboardService;
+    private final AIService aiService;
 
     public MemberController(WorkoutService workoutService,
                             NutritionService nutritionService,
@@ -39,7 +41,8 @@ public class MemberController {
                             MealPlannerService mealPlannerService,
                             BodyMeasurementService bodyMeasurementService,
                             UserService userService,
-                            DashboardService dashboardService) {
+                            DashboardService dashboardService,
+                            AIService aiService) {
         this.workoutService = workoutService;
         this.nutritionService = nutritionService;
         this.workoutPlanService = workoutPlanService;
@@ -48,6 +51,7 @@ public class MemberController {
         this.bodyMeasurementService = bodyMeasurementService;
         this.userService = userService;
         this.dashboardService = dashboardService;
+        this.aiService = aiService;
     }
 
     @GetMapping("/dashboard")
@@ -495,6 +499,14 @@ public class MemberController {
     @GetMapping("/progress/exercises")
     public ResponseEntity<List<String>> getTrackedExercises(Authentication authentication) {
         return ResponseEntity.ok(workoutLoggingService.getTrackedExercises(authentication.getName()));
+    }
+
+    /** Get stalled lifts — exercises not improved in 30+ days, with AI suggestions */
+    @GetMapping("/progress/stalled")
+    public ResponseEntity<List<StalledLiftDto>> getStalledLifts(Authentication authentication) {
+        return ResponseEntity.ok(
+                workoutLoggingService.getStalledLifts(authentication.getName(), aiService)
+        );
     }
 
     /** Get workout summary stats */

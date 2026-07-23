@@ -407,6 +407,83 @@ public class WorkoutLoggingService {
         return results;
     }
 
+    /**
+     * Find exercises where the best set (by 1RM) was achieved more than 30 days ago,
+     * and generate AI suggestions for breaking through the plateau.
+     */
+    public List<StalledLiftDto> getStalledLifts(String email, AIService aiService) {
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        LocalDate cutoffDate = LocalDate.now().minusDays(30);
+        List<Object[]> rawData = sessionRepository.findStalledExercises(
+                member.getId(), cutoffDate.toString()
+        );
+
+        List<StalledLiftDto> results = new ArrayList<>();
+        for (Object[] row : rawData) {
+            StalledLiftDto dto = new StalledLiftDto();
+            dto.setExerciseName(row[0] != null ? row[0].toString() : "Unknown");
+            dto.setMuscleGroup(row[1] != null ? row[1].toString() : null);
+            dto.setEquipment(row[2] != null ? row[2].toString() : null);
+            if (row[3] instanceof Number n) dto.setBestWeightKg(n.doubleValue());
+            if (row[4] instanceof Number n) dto.setBestReps(n.intValue());
+            if (row[5] instanceof Number n) dto.setEstimatedOneRm(n.intValue());
+            if (row[6] instanceof java.sql.Date d) dto.setBestAchievedDate(d.toLocalDate());
+            if (row[7] instanceof Number n) dto.setDaysSinceImprovement(n.longValue());
+            if (row[8] instanceof Number n) dto.setTotalSessionsLogged(n.intValue());
+            if (row[9] instanceof Number n) dto.setTotalSetsLogged(n.intValue());
+
+            // Generate AI suggestion for breaking this plateau
+            dto.setAiSuggestion(generateStallSuggestion(dto, aiService));
+            results.add(dto);
+        }
+
+        return results;
+    }
+
+    private String generateStallSuggestion(StalledLiftDto dto, AIService aiService) {
+        if (!aiService.hasConfiguredApiKey()) {
+            return "Try a different rep scheme (e.g., 5×5 heavy, or 3×8−10 with increased volume) or swap to a variation like " + dto.getExerciseName().replace("Barbell ", "Dumbbell ").replace(" ", "-") + " for 4 weeks to break the plateau.";
+        }
+
+        String prompt = String.format(
+                """
+                You are an expert strength coach analyzing a client's stalled lift.
+                The client has not improved their best set for %s in %d days.
+
+                Current best: %.0f kg × %d reps (estimated 1RM: %d kg)
+                Muscle group: %s
+                Equipment: %s
+                Total sessions logged for this exercise: %d
+
+                Provide ONE concise, actionable suggestion (max 2 sentences) for breaking this plateau.
+                Focus on: rep scheme changes, tempo work, accessory exercises, or exercise variations.
+                Be specific with numbers (sets × reps, percentages).
+                Do not use markdown. Just plain text.
+                """,
+                dto.getExerciseName(), dto.getDaysSinceImprovement(),
+                dto.getBestWeightKg() != null ? dto.getBestWeightKg() : 0,
+                dto.getBestReps() != null ? dto.getBestReps() : 0,
+                dto.getEstimatedOneRm() != null ? dto.getEstimatedOneRm() : 0,
+                dto.getMuscleGroup() != null ? dto.getMuscleGroup() : "General",
+                dto.getEquipment() != null ? dto.getEquipment() : "Bodyweight",
+                dto.getTotalSessionsLogged()
+        );
+
+        try {
+            String response = aiService.askAI(prompt);
+            if (response != null && !response.startsWith("AI error")) {
+                return response.trim();
+            }
+        } catch (Exception e) {
+            // Fall through to fallback
+        }
+
+        // Fallback suggestion
+        return "Try 3×5 at 85−90%% of your 1RM with longer rest (3−4 min), or substitute with " + dto.getExerciseName() + " variation. Focus on the eccentric phase (3−4s lowering).";
+    }
+
     /** Get 1RM progression data points for an exercise chart */
     public List<Map<String, Object>> getProgressionChart(String email, String exerciseName) {
         User member = userRepository.findByEmail(email)

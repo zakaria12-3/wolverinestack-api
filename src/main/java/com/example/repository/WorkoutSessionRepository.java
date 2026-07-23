@@ -86,6 +86,45 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, 
             """, nativeQuery = true)
     List<Object[]> findAllTimeBestPerExercise(@Param("memberId") Long memberId);
 
+    /** Find exercises where the member's best set (by 1RM) was achieved more than 30 days ago */
+    @Query(value = """
+            SELECT exerciseName, muscleGroup, equipment, weightKg, reps,
+                   estimatedOneRm, achievedDate, daysSinceImprovement,
+                   totalSessionsLogged, totalSetsLogged
+            FROM (
+                SELECT wse.exercise_name AS exerciseName,
+                       wse.muscle_group AS muscleGroup,
+                       wse.equipment AS equipment,
+                       es.weight_kg AS weightKg,
+                       es.reps AS reps,
+                       ROUND(es.weight_kg * (1.0 + es.reps / 30.0)) AS estimatedOneRm,
+                       CAST(es.logged_at AS date) AS achievedDate,
+                       (CURRENT_DATE - CAST(es.logged_at AS date)) AS daysSinceImprovement,
+                       (SELECT COUNT(*) FROM workout_sessions ws2
+                        JOIN workout_session_exercises wse2 ON ws2.id = wse2.session_id
+                        WHERE ws2.member_id = :memberId AND wse2.exercise_name = wse.exercise_name) AS totalSessionsLogged,
+                       (SELECT COUNT(*) FROM exercise_sets es3
+                        JOIN workout_session_exercises wse3 ON es3.session_exercise_id = wse3.id
+                        JOIN workout_sessions ws3 ON wse3.session_id = ws3.id
+                        WHERE ws3.member_id = :memberId AND wse3.exercise_name = wse.exercise_name
+                          AND es3.weight_kg IS NOT NULL AND es3.reps IS NOT NULL) AS totalSetsLogged,
+                       ROW_NUMBER() OVER (PARTITION BY wse.exercise_name
+                           ORDER BY ROUND(es.weight_kg * (1.0 + es.reps / 30.0)) DESC) AS rn
+                FROM exercise_sets es
+                JOIN workout_session_exercises wse ON es.session_exercise_id = wse.id
+                JOIN workout_sessions ws ON wse.session_id = ws.id
+                WHERE ws.member_id = :memberId
+                  AND es.weight_kg IS NOT NULL
+                  AND es.reps IS NOT NULL
+                  AND es.reps > 0
+            ) ranked
+            WHERE rn = 1
+              AND CAST(achievedDate AS date) <= CAST(:cutoffDate AS date)
+            ORDER BY daysSinceImprovement DESC, estimatedOneRm DESC
+            """, nativeQuery = true)
+    List<Object[]> findStalledExercises(@Param("memberId") Long memberId,
+                                         @Param("cutoffDate") String cutoffDate);
+
     /** Get all progression data points for a member's exercise (for charts) */
     @Query(value = """
             SELECT wse.exercise_name AS exerciseName,
