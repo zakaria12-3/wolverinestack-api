@@ -138,6 +138,48 @@ public class NutritionService {
         mealEntryRepository.deleteById(entryId);
     }
 
+    @Transactional
+    public MealEntryDto updateMealEntry(Long entryId, LogMealRequestDto request, String email) {
+        MealEntry entry = mealEntryRepository.findById(entryId)
+                .orElseThrow(() -> new RuntimeException("Meal entry not found"));
+        User member = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (!Objects.equals(entry.getMember().getId(), member.getId())) {
+            throw new RuntimeException("Not allowed to update this meal entry");
+        }
+
+        if (request.getMealType() != null) {
+            entry.setMealType(MealType.valueOf(MealType.normalize(request.getMealType())));
+        }
+        if (request.getFoodName() != null) {
+            entry.setFoodName(request.getFoodName());
+        }
+        if (request.getDescription() != null) {
+            entry.setDescription(request.getDescription());
+        }
+        if (request.getQuantity() != null) {
+            entry.setQuantity(request.getQuantity());
+        }
+        if (request.getUnit() != null) {
+            entry.setUnit(request.getUnit());
+        }
+        if (request.getCalories() != null) {
+            entry.setCalories(request.getCalories());
+        }
+        if (request.getProteinGrams() != null) {
+            entry.setProteinGrams(request.getProteinGrams());
+        }
+        if (request.getCarbsGrams() != null) {
+            entry.setCarbsGrams(request.getCarbsGrams());
+        }
+        if (request.getFatGrams() != null) {
+            entry.setFatGrams(request.getFatGrams());
+        }
+
+        MealEntry saved = mealEntryRepository.save(entry);
+        return mapToDto(saved);
+    }
+
     public Map<String, Object> getDailyNutritionSummary(String email, LocalDate date) {
         User member = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));

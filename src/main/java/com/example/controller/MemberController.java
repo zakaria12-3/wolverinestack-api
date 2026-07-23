@@ -114,6 +114,15 @@ public class MemberController {
         );
     }
 
+    @PutMapping("/meals/{id}")
+    public ResponseEntity<MealEntryDto> updateMeal(@PathVariable Long id,
+                                                   @RequestBody LogMealRequestDto request,
+                                                   Authentication authentication) {
+        return ResponseEntity.ok(
+                nutritionService.updateMealEntry(id, request, authentication.getName())
+        );
+    }
+
     @DeleteMapping("/meals/{id}")
     public ResponseEntity<?> deleteMeal(@PathVariable Long id, Authentication authentication) {
         nutritionService.deleteMealEntry(id, authentication.getName());
