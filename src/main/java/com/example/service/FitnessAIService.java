@@ -195,12 +195,12 @@ public class FitnessAIService {
         {
           "suggestions": [
             {
-              "suggestion": "<meal name>",
+              "foodName": "<meal name>",
               "mealType": "<%s>",
-              "estimatedCalories": <integer>,
-              "estimatedProtein": <number>,
-              "estimatedCarbs": <number>,
-              "estimatedFat": <number>,
+              "calories": <integer>,
+              "proteinGrams": <number>,
+              "carbsGrams": <number>,
+              "fatGrams": <number>,
               "reasoning": "<why this fits the remaining macros>"
             }
           ]

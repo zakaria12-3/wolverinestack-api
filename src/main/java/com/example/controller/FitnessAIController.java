@@ -1,16 +1,21 @@
 package com.example.controller;
 
 import com.example.model.User;
+import com.example.dto.DailyProgressDto;
 import com.example.repository.UserRepository;
 import com.example.service.AIService;
 import com.example.service.FitnessAIService;
+import com.example.service.NutritionService;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Base64;
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -19,13 +24,22 @@ public class FitnessAIController {
 
     private final AIService aiService;
     private final FitnessAIService fitnessAIService;
+    private final NutritionService nutritionService;
     private final UserRepository userRepository;
 
     public FitnessAIController(AIService aiService, FitnessAIService fitnessAIService,
-                               UserRepository userRepository) {
+                               NutritionService nutritionService, UserRepository userRepository) {
         this.aiService = aiService;
         this.fitnessAIService = fitnessAIService;
+        this.nutritionService = nutritionService;
         this.userRepository = userRepository;
+    }
+
+    private ResponseEntity<?> aiResponse(Map<String, Object> result) {
+        if (result.containsKey("error")) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(result);
+        }
+        return ResponseEntity.ok(result);
     }
 
     /**
@@ -55,7 +69,7 @@ public class FitnessAIController {
         String foodDescription = body.get("foodDescription");
         String mealType = body.get("mealType");
         try {
-            return ResponseEntity.ok(fitnessAIService.analyzeMeal(foodDescription, mealType));
+            return aiResponse(fitnessAIService.analyzeMeal(foodDescription, mealType));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -81,7 +95,30 @@ public class FitnessAIController {
 
             String encodedImage = Base64.getEncoder().encodeToString(image.getBytes());
             String imageDataUrl = "data:" + contentType + ";base64," + encodedImage;
-            return ResponseEntity.ok(fitnessAIService.analyzeMealImage(imageDataUrl, mealType));
+            return aiResponse(fitnessAIService.analyzeMealImage(imageDataUrl, mealType));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/meal-suggestions")
+    public ResponseEntity<?> suggestMeals(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String mealType,
+            Authentication authentication) {
+        try {
+            LocalDate targetDate = date != null ? date : LocalDate.now();
+            DailyProgressDto progress =
+                    nutritionService.getDailyProgress(authentication.getName(), targetDate);
+            Map<String, Object> result = fitnessAIService.suggestMealsForRemainingMacros(
+                    progress.getCaloriesRemaining(),
+                    progress.getProteinRemaining(),
+                    progress.getCarbsRemaining(),
+                    progress.getFatRemaining(),
+                    mealType
+            );
+            return aiResponse(result);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -96,7 +133,7 @@ public class FitnessAIController {
         String equipment = body.get("equipment");
         String difficulty = body.get("difficulty");
         try {
-            return ResponseEntity.ok(fitnessAIService.suggestWorkout(
+            return aiResponse(fitnessAIService.suggestWorkout(
                     fitnessGoal, activityLevel, equipment, difficulty));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -114,7 +151,7 @@ public class FitnessAIController {
             String difficulty = (String) body.getOrDefault("difficulty", "beginner");
             int weeks = body.get("durationWeeks") instanceof Number n ? n.intValue() : 4;
             int sessions = body.get("sessionsPerWeek") instanceof Number n ? n.intValue() : 3;
-            return ResponseEntity.ok(fitnessAIService.generateWorkoutPlan(goal, difficulty, weeks, sessions));
+            return aiResponse(fitnessAIService.generateWorkoutPlan(goal, difficulty, weeks, sessions));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -130,7 +167,7 @@ public class FitnessAIController {
             if (goal == null) goal = "GENERAL_FITNESS";
             
             String preference = (String) body.getOrDefault("dietaryPreference", "");
-            return ResponseEntity.ok(fitnessAIService.generateDailyMealPlan(calories, goal, preference));
+            return aiResponse(fitnessAIService.generateDailyMealPlan(calories, goal, preference));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
