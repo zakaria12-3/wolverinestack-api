@@ -481,7 +481,7 @@ public class WorkoutLoggingService {
         }
 
         // Fallback suggestion
-        return "Try 3×5 at 85−90%% of your 1RM with longer rest (3−4 min), or substitute with " + dto.getExerciseName() + " variation. Focus on the eccentric phase (3−4s lowering).";
+        return "Try 3×5 at 85-90% of your 1RM with longer rest (3-4 min), or substitute with " + dto.getExerciseName() + " variation. Focus on the eccentric phase (3-4s lowering).";
     }
 
     /** Get 1RM progression data points for an exercise chart */
