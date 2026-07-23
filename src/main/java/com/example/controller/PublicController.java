@@ -95,21 +95,22 @@ public class PublicController {
     /**
      * Proxies the wger exercise database API, returning cleaned exercise data
      * with images, descriptions, muscle groups, and equipment.
-     * This avoids CORS issues from calling wger directly from the browser.
+     * Since wger's built-in 'term' search is unreliable, we fetch a batch
+     * and filter by name/muscle/equipment server-side.
+     * This also avoids CORS issues from calling wger directly from the browser.
      */
     @GetMapping("/exercises/search")
     public Map<String, Object> searchExercises(
             @RequestParam(defaultValue = "") String query,
-            @RequestParam(defaultValue = "24") int limit,
+            @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "2") int language  // 2 = English
     ) {
         try {
+            // Fetch a generous batch — wger's 'term' param doesn't filter properly
+            int fetchLimit = Math.min(limit, 60);
             String wgerUrl = "https://wger.de/api/v2/exerciseinfo/?format=json"
-                    + "&limit=" + Math.min(limit, 50)
+                    + "&limit=" + fetchLimit
                     + "&language=" + language;
-            if (!query.isBlank()) {
-                wgerUrl += "&term=" + java.net.URLEncoder.encode(query.trim(), "UTF-8");
-            }
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(wgerUrl))
@@ -124,7 +125,6 @@ public class PublicController {
                 return Map.of("results", List.of(), "error", "wger API returned " + response.statusCode());
             }
 
-            // Parse the wger response
             @SuppressWarnings("unchecked")
             Map<String, Object> wgerResponse = (Map<String, Object>) new com.fasterxml.jackson.databind.ObjectMapper()
                     .readValue(response.body(), Map.class);
@@ -132,12 +132,32 @@ public class PublicController {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> rawResults = (List<Map<String, Object>>) wgerResponse.getOrDefault("results", List.of());
 
+            // First clean all exercises
             List<Map<String, Object>> cleaned = rawResults.stream()
                     .map(this::cleanExercise)
                     .filter(e -> e.get("name") != null && !((String) e.get("name")).isBlank())
                     .collect(Collectors.toList());
 
-            return Map.of("results", cleaned, "count", wgerResponse.getOrDefault("count", 0));
+            // Then filter by query server-side (since wger's term param doesn't work)
+            List<Map<String, Object>> filtered = cleaned;
+            String q = query.trim().toLowerCase();
+            if (!q.isBlank()) {
+                final String searchTerm = q;
+                filtered = cleaned.stream()
+                        .filter(ex -> {
+                            String name = ((String) ex.getOrDefault("name", "")).toLowerCase();
+                            String muscle = ((String) ex.getOrDefault("muscleGroup", "")).toLowerCase();
+                            String equip = ((String) ex.getOrDefault("equipment", "")).toLowerCase();
+                            String category = ((String) ex.getOrDefault("category", "")).toLowerCase();
+                            return name.contains(searchTerm)
+                                    || muscle.contains(searchTerm)
+                                    || equip.contains(searchTerm)
+                                    || category.contains(searchTerm);
+                        })
+                        .collect(Collectors.toList());
+            }
+
+            return Map.of("results", filtered.subList(0, Math.min(filtered.size(), limit)), "count", filtered.size());
 
         } catch (Exception e) {
             return Map.of("results", List.of(), "error", e.getMessage());
